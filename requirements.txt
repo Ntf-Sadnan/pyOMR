@@ -4,3 +4,4 @@ numpy
 opencv-python-headless
 setuptools
 wheel
+flask-cors
