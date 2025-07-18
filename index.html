@@ -4,37 +4,56 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OMR Scanner API Client</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f9; }
-        h1, h2 { color: #333; }
-        #container { max-width: 800px; margin: auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        input[type="file"] { margin-bottom: 1em; }
-        button { font-size: 1.1em; padding: 10px 15px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; }
-        button:disabled { background-color: #cccccc; }
-        #status { margin: 1em 0; font-weight: bold; }
-        img { max-width: 100%; border: 1px solid #ddd; margin-top: 1em; }
-        pre { background-color: #eee; padding: 1em; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; }
+        /* Custom styles can be added here if needed */
     </style>
 </head>
-<body>
+<body class="bg-gray-100">
 
-    <div id="container">
-        <h1>OMR Sheet Scanner</h1>
-        <p>Select an image of your OMR sheet to scan.</p>
-        
-        <input type="file" id="imageInput" accept="image/*">
-        <button id="scanButton" disabled>Scan OMR Sheet</button>
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <div class="bg-white rounded-lg shadow-lg p-6 sm:p-8">
 
-        <div id="status"></div>
+            <div class="text-center mb-8">
+                <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">OMR Sheet Scanner</h1>
+                <p class="text-gray-600 mt-2">Select an image of your OMR sheet to scan.</p>
+            </div>
 
-        <h2>Your Selected Image:</h2>
-        <img id="imagePreview" src="" alt="Preview of the selected image">
+            <div class="mb-6">
+                <label for="imageInput" class="w-full text-center inline-block cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">
+                    Select Image or Use Camera
+                </label>
+                <input type="file" id="imageInput" accept="image/*" capture="environment" class="hidden">
+            </div>
 
-        <h2>Scanned Results Image:</h2>
-        <img id="resultsImage" src="" alt="Processed image from the API">
+            <button id="scanButton" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                Scan OMR Sheet
+            </button>
 
-        <h2>Detected Answers (JSON):</h2>
-        <pre id="resultsJson"></pre>
+            <div id="status" class="text-center my-4 font-semibold text-gray-700"></div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Your Selected Image:</h2>
+                    <div class="bg-gray-200 rounded-lg p-4 min-h-[200px] flex items-center justify-center">
+                        <img id="imagePreview" src="" alt="Preview of the selected image" class="max-w-full h-auto rounded-lg hidden">
+                        <span id="imagePreviewPlaceholder" class="text-gray-500">Image preview will appear here</span>
+                    </div>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Scanned Results Image:</h2>
+                    <div class="bg-gray-200 rounded-lg p-4 min-h-[200px] flex items-center justify-center">
+                        <img id="resultsImage" src="" alt="Processed image from the API" class="max-w-full h-auto rounded-lg hidden">
+                        <span id="resultsImagePlaceholder" class="text-gray-500">Processed image will appear here</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Detected Answers (JSON):</h2>
+                <pre id="resultsJson" class="bg-gray-900 text-white p-4 rounded-lg text-sm overflow-x-auto"></pre>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -45,7 +64,9 @@
         const imagePreview = document.getElementById('imagePreview');
         const resultsImage = document.getElementById('resultsImage');
         const resultsJson = document.getElementById('resultsJson');
-        
+        const imagePreviewPlaceholder = document.getElementById('imagePreviewPlaceholder');
+        const resultsImagePlaceholder = document.getElementById('resultsImagePlaceholder');
+
         let fileAsBase64 = null;
 
         // --- Event Listener for File Input ---
@@ -58,22 +79,24 @@
 
             // Use FileReader to convert image to Base64
             const reader = new FileReader();
-            
+
             reader.onload = (e) => {
                 // The result includes the data URL prefix (e.g., "data:image/jpeg;base64,")
                 const fullBase64String = e.target.result;
-                
+
                 // Show the selected image in the preview
                 imagePreview.src = fullBase64String;
-                
+                imagePreview.classList.remove('hidden');
+                imagePreviewPlaceholder.classList.add('hidden');
+
                 // Store the RAW base64 data for the API call. We MUST remove the prefix.
                 // The prefix ends at the first comma.
                 fileAsBase64 = fullBase64String.split(',')[1];
-                
+
                 scanButton.disabled = false;
                 statusDiv.textContent = "Image is ready to be scanned.";
             };
-            
+
             reader.onerror = () => {
                 statusDiv.textContent = "Error reading the file.";
                 console.error("FileReader error.");
@@ -95,6 +118,8 @@
             statusDiv.textContent = "Scanning... Please wait.";
             scanButton.disabled = true;
             resultsImage.src = "";
+            resultsImage.classList.add('hidden');
+            resultsImagePlaceholder.classList.remove('hidden');
             resultsJson.textContent = "";
 
             try {
@@ -106,7 +131,7 @@
                     },
                     // Construct the JSON body as required by the API
                     body: JSON.stringify({
-                        base64_data: fileAsBase64 
+                        base64_data: fileAsBase64
                     })
                 });
 
@@ -119,15 +144,17 @@
                 const data = await response.json();
 
                 // --- Display the Results ---
-                
+
                 // 1. Display the processed image
                 // We MUST add the data URL prefix back on to display the image in the browser.
                 resultsImage.src = `data:image/jpeg;base64,${data['scanned_results.jpg']}`;
-                
+                resultsImage.classList.remove('hidden');
+                resultsImagePlaceholder.classList.add('hidden');
+
                 // 2. Display the JSON data
                 // JSON.stringify with indentation makes it readable.
                 resultsJson.textContent = JSON.stringify(data['omr_base_data.json'], null, 2);
-                
+
                 statusDiv.textContent = "Scan complete!";
 
             } catch (error) {
