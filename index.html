@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMR Scanner API Client</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f9; }
+        h1, h2 { color: #333; }
+        #container { max-width: 800px; margin: auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        input[type="file"] { margin-bottom: 1em; }
+        button { font-size: 1.1em; padding: 10px 15px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; }
+        button:disabled { background-color: #cccccc; }
+        #status { margin: 1em 0; font-weight: bold; }
+        img { max-width: 100%; border: 1px solid #ddd; margin-top: 1em; }
+        pre { background-color: #eee; padding: 1em; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+
+    <div id="container">
+        <h1>OMR Sheet Scanner</h1>
+        <p>Select an image of your OMR sheet to scan.</p>
+        
+        <input type="file" id="imageInput" accept="image/*">
+        <button id="scanButton" disabled>Scan OMR Sheet</button>
+
+        <div id="status"></div>
+
+        <h2>Your Selected Image:</h2>
+        <img id="imagePreview" src="" alt="Preview of the selected image">
+
+        <h2>Scanned Results Image:</h2>
+        <img id="resultsImage" src="" alt="Processed image from the API">
+
+        <h2>Detected Answers (JSON):</h2>
+        <pre id="resultsJson"></pre>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const imageInput = document.getElementById('imageInput');
+        const scanButton = document.getElementById('scanButton');
+        const statusDiv = document.getElementById('status');
+        const imagePreview = document.getElementById('imagePreview');
+        const resultsImage = document.getElementById('resultsImage');
+        const resultsJson = document.getElementById('resultsJson');
+        
+        let fileAsBase64 = null;
+
+        // --- Event Listener for File Input ---
+        imageInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                scanButton.disabled = true;
+                return;
+            }
+
+            // Use FileReader to convert image to Base64
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                // The result includes the data URL prefix (e.g., "data:image/jpeg;base64,")
+                const fullBase64String = e.target.result;
+                
+                // Show the selected image in the preview
+                imagePreview.src = fullBase64String;
+                
+                // Store the RAW base64 data for the API call. We MUST remove the prefix.
+                // The prefix ends at the first comma.
+                fileAsBase64 = fullBase64String.split(',')[1];
+                
+                scanButton.disabled = false;
+                statusDiv.textContent = "Image is ready to be scanned.";
+            };
+            
+            reader.onerror = () => {
+                statusDiv.textContent = "Error reading the file.";
+                console.error("FileReader error.");
+            };
+
+            // Read the file as a Data URL (which is a base64 string with a prefix)
+            reader.readAsDataURL(file);
+        });
+
+
+        // --- Event Listener for the Scan Button ---
+        scanButton.addEventListener('click', async () => {
+            if (!fileAsBase64) {
+                statusDiv.textContent = "No file selected or file is not ready.";
+                return;
+            }
+
+            // Update UI to show processing state
+            statusDiv.textContent = "Scanning... Please wait.";
+            scanButton.disabled = true;
+            resultsImage.src = "";
+            resultsJson.textContent = "";
+
+            try {
+                // --- API Call using fetch ---
+                const response = await fetch('https://pyomr.onrender.com/scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    // Construct the JSON body as required by the API
+                    body: JSON.stringify({
+                        base64_data: fileAsBase64 
+                    })
+                });
+
+                if (!response.ok) {
+                    // Handle HTTP errors (like 500, 400, etc.)
+                    const errorData = await response.json();
+                    throw new Error(`API Error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+                }
+
+                const data = await response.json();
+
+                // --- Display the Results ---
+                
+                // 1. Display the processed image
+                // We MUST add the data URL prefix back on to display the image in the browser.
+                resultsImage.src = `data:image/jpeg;base64,${data['scanned_results.jpg']}`;
+                
+                // 2. Display the JSON data
+                // JSON.stringify with indentation makes it readable.
+                resultsJson.textContent = JSON.stringify(data['omr_base_data.json'], null, 2);
+                
+                statusDiv.textContent = "Scan complete!";
+
+            } catch (error) {
+                console.error('Failed to scan:', error);
+                statusDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                // Re-enable the button after the process is finished (success or fail)
+                scanButton.disabled = false;
+            }
+        });
+    </script>
+
+</body>
+</html>
