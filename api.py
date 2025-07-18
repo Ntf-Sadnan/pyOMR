@@ -1,7 +1,12 @@
 from flask import Flask, request, jsonify
 from omr_processor import process_omr_sheet
+from flask_cors import CORS # 1. Import CORS
 
 app = Flask(__name__)
+
+# 2. Apply CORS to your app. This will allow all origins to access your API.
+# For production, you might want to restrict this to your website's domain.
+CORS(app) 
 
 @app.route('/scan', methods=['POST'])
 def scan_omr():
@@ -24,6 +29,7 @@ def scan_omr():
     }
 
     return jsonify(response_data)
+
 
 import os
 
