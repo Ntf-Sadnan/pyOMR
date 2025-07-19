@@ -3,62 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Automated OMR Scanner</title>
+    <title>PyOMR</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Asynchronously load OpenCV.js and define a callback -->
-    <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
     <style>
-        .spinner {
-            border: 2px solid rgba(0, 0, 0, 0.1);
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            border-left-color: #0ea5e9; /* sky-500 */
-            animation: spin 1s ease infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        /* Custom styles can be added here if needed */
     </style>
 </head>
 <body class="bg-gray-100">
 
-    <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl">
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
         <div class="bg-white rounded-lg shadow-lg p-6 sm:p-8">
 
             <div class="text-center mb-8">
-                <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">Automated OMR Scanner</h1>
-                <p id="subheading" class="text-gray-500 mt-2">OpenCV.js is loading... Please wait.</p>
+                <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">OMR Sheet Scanner</h1>
+                <p class="text-gray-600 mt-2">Select an image of your OMR sheet to scan.</p>
             </div>
 
-            <!-- Image Upload Button -->
             <div class="mb-6">
-                <label for="imageInput" id="uploadLabel" class="w-full text-center inline-block cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 opacity-50 cursor-not-allowed">
-                    Upload Image or Use Camera
+                <label for="imageInput" class="w-full text-center inline-block cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">
+                    Select Image or Use Camera
                 </label>
-                <!-- The 'capture' attribute has been removed to allow gallery selection on mobile -->
-                <input type="file" id="imageInput" accept="image/*" class="hidden" disabled>
+                <input type="file" id="imageInput" accept="image/*" capture="environment" class="hidden">
             </div>
-            
-            <!-- Status Display -->
-            <div id="status" class="text-center my-4 font-semibold text-gray-700 h-6 flex items-center justify-center space-x-2"></div>
-            
-            <!-- Hidden canvases for processing -->
-            <canvas id="originalCanvas" class="hidden"></canvas>
-            <canvas id="resultCanvas" class="hidden"></canvas>
 
-            <!-- Results Display Grid -->
+            <button id="scanButton" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                Scan OMR Sheet
+            </button>
+
+            <div id="status" class="text-center my-4 font-semibold text-gray-700"></div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
                 <div>
-                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Your Image:</h2>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Your Selected Image:</h2>
                     <div class="bg-gray-200 rounded-lg p-4 min-h-[200px] flex items-center justify-center">
                         <img id="imagePreview" src="" alt="Preview of the selected image" class="max-w-full h-auto rounded-lg hidden">
                         <span id="imagePreviewPlaceholder" class="text-gray-500">Image preview will appear here</span>
                     </div>
                 </div>
                 <div>
-                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Scan Results:</h2>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Scanned Results Image:</h2>
                     <div class="bg-gray-200 rounded-lg p-4 min-h-[200px] flex items-center justify-center">
                         <img id="resultsImage" src="" alt="Processed image from the API" class="max-w-full h-auto rounded-lg hidden">
                         <span id="resultsImagePlaceholder" class="text-gray-500">Processed image will appear here</span>
@@ -66,10 +49,9 @@
                 </div>
             </div>
 
-            <!-- JSON Output -->
             <div class="mt-8">
                 <h2 class="text-2xl font-bold text-gray-800 mb-4">Detected Answers (JSON):</h2>
-                <pre id="resultsJson" class="bg-gray-900 text-white p-4 rounded-lg text-sm overflow-x-auto">No results yet.</pre>
+                <pre id="resultsJson" class="bg-gray-900 text-white p-4 rounded-lg text-sm overflow-x-auto"></pre>
             </div>
         </div>
     </div>
@@ -77,214 +59,113 @@
     <script>
         // --- DOM Elements ---
         const imageInput = document.getElementById('imageInput');
-        const uploadLabel = document.getElementById('uploadLabel');
-        const subheading = document.getElementById('subheading');
+        const scanButton = document.getElementById('scanButton');
         const statusDiv = document.getElementById('status');
         const imagePreview = document.getElementById('imagePreview');
         const resultsImage = document.getElementById('resultsImage');
         const resultsJson = document.getElementById('resultsJson');
         const imagePreviewPlaceholder = document.getElementById('imagePreviewPlaceholder');
         const resultsImagePlaceholder = document.getElementById('resultsImagePlaceholder');
-        const originalCanvas = document.getElementById('originalCanvas');
-        const resultCanvas = document.getElementById('resultCanvas');
 
-        let cv = null;
+        let fileAsBase64 = null;
 
-        // 1. Called when OpenCV.js is loaded and ready
-        function onOpenCvReady() {
-            cv = window.cv;
-            subheading.textContent = "Upload an OMR sheet to begin scanning.";
-            uploadLabel.classList.remove('opacity-50', 'cursor-not-allowed');
-            imageInput.disabled = false;
-        }
-
-        // 2. Main trigger when a file is selected (from camera OR gallery)
+        // --- Event Listener for File Input ---
         imageInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
-            if (!file) return;
+            if (!file) {
+                scanButton.disabled = true;
+                return;
+            }
 
-            // --- Reset UI for new scan ---
-            resultsImage.src = '';
-            resultsImage.classList.add('hidden');
-            resultsImagePlaceholder.classList.remove('hidden');
-            resultsJson.textContent = 'Processing...';
-
+            // Use FileReader to convert image to Base64
             const reader = new FileReader();
+
             reader.onload = (e) => {
-                // Show the original image preview immediately
-                imagePreview.src = e.target.result;
+                // The result includes the data URL prefix (e.g., "data:image/jpeg;base64,")
+                const fullBase64String = e.target.result;
+
+                // Show the selected image in the preview
+                imagePreview.src = fullBase64String;
                 imagePreview.classList.remove('hidden');
                 imagePreviewPlaceholder.classList.add('hidden');
-                
-                // Automatically start the full processing pipeline
-                runFullScan(e.target.result);
+
+                // Store the RAW base64 data for the API call. We MUST remove the prefix.
+                // The prefix ends at the first comma.
+                fileAsBase64 = fullBase64String.split(',')[1];
+
+                scanButton.disabled = false;
+                statusDiv.textContent = "Image is ready to be scanned.";
             };
+
+            reader.onerror = () => {
+                statusDiv.textContent = "Error reading the file.";
+                console.error("FileReader error.");
+            };
+
+            // Read the file as a Data URL (which is a base64 string with a prefix)
             reader.readAsDataURL(file);
         });
-        
-        // 3. Orchestrates the entire scan process
-        async function runFullScan(imageDataUrl) {
+
+
+        // --- Event Listener for the Scan Button ---
+        scanButton.addEventListener('click', async () => {
+            if (!fileAsBase64) {
+                statusDiv.textContent = "No file selected or file is not ready.";
+                return;
+            }
+
+            // Update UI to show processing state
+            statusDiv.textContent = "Scanning... Please wait.";
+            scanButton.disabled = true;
+            resultsImage.src = "";
+            resultsImage.classList.add('hidden');
+            resultsImagePlaceholder.classList.remove('hidden');
+            resultsJson.textContent = "";
+
             try {
-                // STAGE 1: Pre-process the image in the browser using OpenCV.js
-                updateStatus("Step 1/3: Pre-processing image in browser...", true);
-                const preProcessedBase64 = await preProcessImage(imageDataUrl);
+                // --- API Call using fetch ---
+                const response = await fetch('https://fa5372fc-0552-4067-9794-763e270c4c36-00-1u6ag3r9e8wnw.sisko.replit.dev/scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    // Construct the JSON body as required by the API
+                    body: JSON.stringify({
+                        base64_data: fileAsBase64
+                    })
+                });
 
-                // STAGE 2: Send the cleaned image to the OMR API
-                updateStatus("Step 2/3: Sending to OMR scanner API...", true);
-                const apiResult = await callOMRAPI(preProcessedBase64);
+                if (!response.ok) {
+                    // Handle HTTP errors (like 500, 400, etc.)
+                    const errorData = await response.json();
+                    throw new Error(`API Error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+                }
 
-                // STAGE 3: Display the final results from the API
-                updateStatus("Step 3/3: Scan complete!", false);
-                displayApiResults(apiResult);
+                const data = await response.json();
+
+                // --- Display the Results ---
+
+                // 1. Display the processed image
+                // We MUST add the data URL prefix back on to display the image in the browser.
+                resultsImage.src = `data:image/jpeg;base64,${data['scanned_results.jpg']}`;
+                resultsImage.classList.remove('hidden');
+                resultsImagePlaceholder.classList.add('hidden');
+
+                // 2. Display the JSON data
+                // JSON.stringify with indentation makes it readable.
+                resultsJson.textContent = JSON.stringify(data['omr_base_data.json'], null, 2);
+
+                statusDiv.textContent = "Scan complete!";
 
             } catch (error) {
-                console.error("Full scan failed:", error);
-                updateStatus(`Error: ${error.message}`, false);
-                resultsJson.textContent = `An error occurred: ${error.message}`;
+                console.error('Failed to scan:', error);
+                statusDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                // Re-enable the button after the process is finished (success or fail)
+                scanButton.disabled = false;
             }
-        }
-
-        // --- Helper function to update the status text and spinner ---
-        function updateStatus(text, showSpinner) {
-            statusDiv.innerHTML = showSpinner 
-                ? `<div class="spinner"></div><span>${text}</span>` 
-                : `<span>${text}</span>`;
-        }
-
-        // --- STAGE 1: Client-Side Image Pre-processing Logic ---
-        function preProcessImage(imageDataUrl) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    originalCanvas.width = img.width;
-                    originalCanvas.height = img.height;
-                    originalCanvas.getContext('2d').drawImage(img, 0, 0);
-
-                    let mat = cv.imread(originalCanvas);
-                    let processedMat;
-                    
-                    try {
-                        // The following is the exact processing pipeline from the first script
-                        if (mat.channels() === 4) cv.cvtColor(mat, mat, cv.COLOR_RGBA2RGB);
-
-                        // Auto-crop (optional, but good for robustness)
-                        const markers = findRegistrationMarkers(mat);
-                        let cropped = cropToMarkers(mat, markers);
-                        
-                        // Enhance and Threshold
-                        let enhanced = highQualityScan(cropped);
-                        processedMat = otsuWithPreprocessing(enhanced);
-
-                        // Draw result to the hidden result canvas
-                        cv.imshow(resultCanvas, processedMat);
-                        
-                        // Return the result as a Base64 string
-                        resolve(resultCanvas.toDataURL('image/png').split(',')[1]);
-
-                        // Cleanup OpenCV objects
-                        [mat, cropped, enhanced, processedMat].forEach(m => m && !m.isDeleted() && m.delete());
-                        
-                    } catch (err) {
-                        reject(new Error(`OpenCV.js processing failed: ${err.message}`));
-                    }
-                };
-                img.onerror = () => reject(new Error("Could not load image for processing."));
-                img.src = imageDataUrl;
-            });
-        }
-
-        // --- STAGE 2: OMR API Call Logic ---
-        async function callOMRAPI(base64Data) {
-            const response = await fetch('https://pyomr.onrender.com/scan', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ base64_data: base64Data })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: "Unknown API error" }));
-                throw new Error(`API Error: ${response.status} - ${errorData.error}`);
-            }
-            return await response.json();
-        }
-
-        // --- STAGE 3: Display Logic ---
-        function displayApiResults(data) {
-            // Display the processed image from the API
-            resultsImage.src = `data:image/jpeg;base64,${data['scanned_results.jpg']}`;
-            resultsImage.classList.remove('hidden');
-            resultsImagePlaceholder.classList.add('hidden');
-
-            // Display the formatted JSON data
-            resultsJson.textContent = JSON.stringify(data['omr_base_data.json'], null, 2);
-        }
-
-        // --- All OpenCV.js utility functions, copied from the first script ---
-        function convertToGray(mat) {
-            let gray = new cv.Mat();
-            if (mat.channels() === 4) cv.cvtColor(mat, gray, cv.COLOR_RGBA2GRAY);
-            else if (mat.channels() === 3) cv.cvtColor(mat, gray, cv.COLOR_RGB2GRAY);
-            else mat.copyTo(gray);
-            return gray;
-        }
-
-        function findRegistrationMarkers(mat) {
-            let gray = convertToGray(mat);
-            let binary = new cv.Mat();
-            cv.threshold(gray, binary, 100, 255, cv.THRESH_BINARY_INV);
-            let contours = new cv.MatVector();
-            let hierarchy = new cv.Mat();
-            cv.findContours(binary, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-            let squares = [];
-            for (let i = 0; i < contours.size(); i++) {
-                let contour = contours.get(i);
-                let area = cv.contourArea(contour);
-                if (area > 200 && area < 5000) {
-                    let rect = cv.boundingRect(contour);
-                    let aspectRatio = rect.width / rect.height;
-                    if (aspectRatio > 0.7 && aspectRatio < 1.3) squares.push({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, area: area });
-                }
-                contour.delete();
-            }
-            [gray, binary, contours, hierarchy].forEach(m => m.delete());
-            squares.sort((a, b) => b.area - a.area);
-            return squares.length >= 4 ? squares.slice(0, 6) : null;
-        }
-        
-        function cropToMarkers(mat, markers) {
-             if (!markers) return mat.clone();
-             let minX = Math.max(0, Math.min(...markers.map(m => m.x)) - 50);
-             let maxX = Math.min(mat.cols, Math.max(...markers.map(m => m.x)) + 50);
-             let minY = Math.max(0, Math.min(...markers.map(m => m.y)) - 50);
-             let maxY = Math.min(mat.rows, Math.max(...markers.map(m => m.y)) + 50);
-             return mat.roi(new cv.Rect(minX, minY, maxX - minX, maxY - minY));
-        }
-        
-        function highQualityScan(mat) {
-            let gray = convertToGray(mat);
-            let enhanced = new cv.Mat();
-            let clahe = new cv.CLAHE(1.5, new cv.Size(16, 16));
-            clahe.apply(gray, enhanced);
-            let filtered = new cv.Mat();
-            cv.bilateralFilter(enhanced, filtered, 9, 75, 75);
-            let sharpened = new cv.Mat();
-            let kernel = cv.matFromArray(3, 3, cv.CV_32FC1, [-1, -1, -1, -1, 9, -1, -1, -1, -1]);
-            cv.filter2D(filtered, sharpened, -1, kernel);
-            let result = new cv.Mat();
-            cv.addWeighted(filtered, 0.7, sharpened, 0.3, 0, result);
-            cv.normalize(result, result, 0, 255, cv.NORM_MINMAX);
-            [gray, clahe, enhanced, filtered, kernel, sharpened].forEach(m => m.delete());
-            return result;
-        }
-
-        function otsuWithPreprocessing(mat) {
-            let blurred = new cv.Mat();
-            cv.GaussianBlur(mat, blurred, new cv.Size(3, 3), 0);
-            let binary = new cv.Mat();
-            cv.threshold(blurred, binary, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
-            blurred.delete();
-            return binary;
-        }
+        });
     </script>
+
 </body>
 </html>
