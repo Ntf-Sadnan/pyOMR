@@ -32,6 +32,59 @@
             border-radius: 4px;
             border: 2px solid #1a202c; /* bg-gray-800 */
         }
+
+        /* Camera Modal Styles */
+        #cameraModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #cameraContainer {
+            position: relative;
+            max-width: 90vw;
+            max-height: 90vh;
+        }
+
+        #cameraFeed {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+
+        #captureButton {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            background-color: #fff;
+            color: #1a202c;
+            border: none;
+            border-radius: 9999px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #closeCameraButton {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            border: none;
+            border-radius: 9999px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans">
@@ -58,6 +111,17 @@
             </div>
         </div>
         <input type="file" id="imageInput" accept="image/*" class="hidden">
+
+        <!-- Camera Modal -->
+        <div id="cameraModal">
+            <div id="cameraContainer">
+                <video id="cameraFeed" autoplay playsinline></video>
+                <button id="captureButton">Capture</button>
+                <button id="closeCameraButton">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
 
         <!-- Status & Results Area -->
         <div id="status" class="text-center my-5 font-semibold text-gray-400 min-h-[24px]"></div>
@@ -107,55 +171,81 @@
         const resultsImagePlaceholder = document.getElementById('resultsImagePlaceholder');
         const resultsLoader = document.getElementById('resultsLoader');
         const resultsJson = document.getElementById('resultsJson');
+        const cameraModal = document.getElementById('cameraModal');
+        const cameraFeed = document.getElementById('cameraFeed');
+        const captureButton = document.getElementById('captureButton');
+        const closeCameraButton = document.getElementById('closeCameraButton');
 
         let fileAsBase64 = null;
+        let stream = null;
 
         // --- Event Listeners for Buttons ---
-        useCameraButton.addEventListener('click', () => {
-            imageInput.setAttribute('capture', 'environment'); // Prefers the rear camera
-            imageInput.click();
+        useCameraButton.addEventListener('click', async () => {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    cameraModal.style.display = 'flex';
+                    cameraFeed.srcObject = stream;
+                } catch (error) {
+                    console.error('Error accessing the camera.', error);
+                    statusDiv.textContent = 'Could not access the camera. Please check permissions.';
+                }
+            } else {
+                statusDiv.textContent = 'Your browser does not support camera access.';
+            }
         });
 
         selectGalleryButton.addEventListener('click', () => {
-            imageInput.removeAttribute('capture');
             imageInput.click();
         });
 
+        closeCameraButton.addEventListener('click', () => {
+            stopCameraStream();
+            cameraModal.style.display = 'none';
+        });
+
+        captureButton.addEventListener('click', () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = cameraFeed.videoWidth;
+            canvas.height = cameraFeed.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(cameraFeed, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg');
+            stopCameraStream();
+            cameraModal.style.display = 'none';
+            handleImageData(dataUrl);
+        });
+
         // --- Event Listener for File Input ---
-        // This now triggers the entire process
         imageInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (!file) return;
 
-            // Immediately start the process
-            handleImageFile(file);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                handleImageData(e.target.result);
+            };
+            reader.readAsDataURL(file);
         });
 
         // --- Core Logic Functions ---
-        const handleImageFile = (file) => {
-            const reader = new FileReader();
+        const stopCameraStream = () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
 
-            reader.onload = (e) => {
-                const fullBase64String = e.target.result;
+        const handleImageData = (dataUrl) => {
+            // Show preview
+            imagePreview.src = dataUrl;
+            imagePreview.classList.remove('hidden');
+            imagePreviewPlaceholder.classList.add('hidden');
 
-                // Show preview
-                imagePreview.src = fullBase64String;
-                imagePreview.classList.remove('hidden');
-                imagePreviewPlaceholder.classList.add('hidden');
+            // Extract raw base64 data for the API
+            fileAsBase64 = dataUrl.split(',')[1];
 
-                // Extract raw base64 data for the API
-                fileAsBase64 = fullBase64String.split(',')[1];
-
-                // INSTANTLY START SCANNING
-                scanImage();
-            };
-
-            reader.onerror = () => {
-                statusDiv.textContent = "Error reading the file.";
-                console.error("FileReader error.");
-            };
-
-            reader.readAsDataURL(file);
+            // INSTANTLY START SCANNING
+            scanImage();
         };
 
         const scanImage = async () => {
