@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PyOMR</title>
+    <title>Automated OMR Scanner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Asynchronously load OpenCV.js and define a callback -->
     <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
@@ -28,16 +28,17 @@
         <div class="bg-white rounded-lg shadow-lg p-6 sm:p-8">
 
             <div class="text-center mb-8">
-                <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">PyOMR</h1>
+                <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">Automated OMR Scanner</h1>
                 <p id="subheading" class="text-gray-500 mt-2">OpenCV.js is loading... Please wait.</p>
             </div>
 
             <!-- Image Upload Button -->
             <div class="mb-6">
                 <label for="imageInput" id="uploadLabel" class="w-full text-center inline-block cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 opacity-50 cursor-not-allowed">
-                    Select Image or Use Camera
+                    Upload Image or Use Camera
                 </label>
-                <input type="file" id="imageInput" accept="image/*" capture="environment" class="hidden" disabled>
+                <!-- The 'capture' attribute has been removed to allow gallery selection on mobile -->
+                <input type="file" id="imageInput" accept="image/*" class="hidden" disabled>
             </div>
             
             <!-- Status Display -->
@@ -97,7 +98,7 @@
             imageInput.disabled = false;
         }
 
-        // 2. Main trigger when a file is selected
+        // 2. Main trigger when a file is selected (from camera OR gallery)
         imageInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
             if (!file) return;
