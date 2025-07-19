@@ -5,99 +5,77 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PyOMR</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script async src="https://docs.opencv.org/4.x/opencv.js" onload="onCvReady();"></script>
     <style>
-        /* A simple pulse animation for the loading state */
-        @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: .5;
-            }
-        }
-        .animate-pulse {
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        }
+        /* A simple pulse animation */
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 
-        /* Webkit scrollbar styling for a cleaner look in the JSON viewer */
-        pre::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        pre::-webkit-scrollbar-track {
-            background: #1a202c; /* bg-gray-800 */
-        }
-        pre::-webkit-scrollbar-thumb {
-            background-color: #4a5568; /* bg-gray-600 */
-            border-radius: 4px;
-            border: 2px solid #1a202c; /* bg-gray-800 */
-        }
+        /* Webkit scrollbar styling */
+        pre::-webkit-scrollbar { width: 8px; height: 8px; }
+        pre::-webkit-scrollbar-track { background: #1a202c; }
+        pre::-webkit-scrollbar-thumb { background-color: #4a5568; border-radius: 4px; border: 2px solid #1a202c; }
 
         /* Camera Modal Styles */
         #cameraModal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.8); display: none;
+            justify-content: center; align-items: center; z-index: 1000;
         }
 
         #cameraContainer {
-            position: relative;
-            max-width: 90vw;
-            max-height: 90vh;
+            position: relative; width: 90vw; max-width: 500px;
+            aspect-ratio: 601 / 775; background: #000;
+            border-radius: 8px; overflow: hidden;
         }
-
+        
         #cameraFeed {
-            width: 100%;
-            height: auto;
-            border-radius: 8px;
+            position: absolute; top: 50%; left: 50%;
+            width: 100%; height: 100%;
+            object-fit: cover; /* This causes the capture crop issue we will solve */
+            transform: translate(-50%, -50%);
         }
 
+        /* Styles for the PERMANENT guide boxes */
+        .guide-box {
+            position: absolute; width: 60px; height: 60px;
+            border: 3px solid rgba(255, 255, 255, 0.7);
+            border-radius: 4px;
+            transition: border-color 0.2s ease-in-out;
+            z-index: 5;
+        }
+        #guide-box-tl { top: 20px; left: 20px; }
+        #guide-box-tr { top: 20px; right: 20px; }
+        #guide-box-bl { bottom: 20px; left: 20px; }
+        #guide-box-br { bottom: 20px; right: 20px; }
+
+        /* The 'aligned' state when a marker is inside */
+        .guide-box.is-aligned {
+            border-color: #4ade80; /* A bright green */
+        }
+        
+        #captureButton, #closeCameraButton {
+            position: absolute; z-index: 10; cursor: pointer;
+            background-color: rgba(0, 0, 0, 0.5); color: #fff;
+            border: none; border-radius: 9999px;
+        }
         #captureButton {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 12px 24px;
-            background-color: #fff;
-            color: #1a202c;
-            border: none;
-            border-radius: 9999px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            bottom: 20px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; font-weight: bold;
+            background-color: #fff; color: #1a202c;
         }
-
-        #closeCameraButton {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            padding: 8px;
-            background-color: rgba(0, 0, 0, 0.5);
-            color: #fff;
-            border: none;
-            border-radius: 9999px;
-            cursor: pointer;
-        }
+        #closeCameraButton { top: 20px; right: 20px; padding: 8px; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200 font-sans">
 
     <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-5xl">
-
-        <!-- Header -->
         <header class="text-center mb-10">
             <h1 class="text-4xl sm:text-5xl font-bold text-white">PyOMR</h1>
-            <p class="text-gray-400 mt-3 text-lg">Instantly scan your OMR sheets from an image.</p>
+            <p class="text-gray-400 mt-3 text-lg">Align the OMR sheet's corners with the guide boxes.</p>
         </header>
 
-        <!-- Action Buttons -->
         <div class="max-w-xl mx-auto mb-10">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <button id="useCameraButton" class="w-full bg-white text-gray-900 font-bold py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors duration-300 flex items-center justify-center space-x-2">
@@ -112,22 +90,25 @@
         </div>
         <input type="file" id="imageInput" accept="image/*" class="hidden">
 
-        <!-- Camera Modal -->
         <div id="cameraModal">
             <div id="cameraContainer">
                 <video id="cameraFeed" autoplay playsinline></video>
+                <div id="guide-box-tl" class="guide-box"></div>
+                <div id="guide-box-tr" class="guide-box"></div>
+                <div id="guide-box-bl" class="guide-box"></div>
+                <div id="guide-box-br" class="guide-box"></div>
+                <canvas id="processingCanvas" class="hidden"></canvas>
                 <button id="captureButton">Capture</button>
                 <button id="closeCameraButton">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
                 </button>
             </div>
         </div>
 
-        <!-- Status & Results Area -->
+        <div id="cvStatus" class="text-center my-2 font-semibold text-yellow-400"></div>
         <div id="status" class="text-center my-5 font-semibold text-gray-400 min-h-[24px]"></div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <!-- Input Image Card -->
             <div>
                 <h2 class="text-xl font-bold text-white mb-4">Input Image</h2>
                 <div class="bg-gray-800 rounded-lg p-4 min-h-[300px] flex items-center justify-center border border-gray-700">
@@ -135,7 +116,6 @@
                     <span id="imagePreviewPlaceholder" class="text-gray-500">Select an image to begin</span>
                 </div>
             </div>
-            <!-- Results Image Card -->
             <div>
                 <h2 class="text-xl font-bold text-white mb-4">Processed Image</h2>
                 <div id="resultsContainer" class="bg-gray-800 rounded-lg p-4 min-h-[300px] flex items-center justify-center border border-gray-700">
@@ -149,22 +129,20 @@
             </div>
         </div>
 
-        <!-- JSON Output -->
         <div class="mt-10">
             <h2 class="text-xl font-bold text-white mb-4">Detected Answers (JSON)</h2>
             <div class="bg-gray-800 rounded-lg border border-gray-700">
                 <pre id="resultsJson" class="p-4 rounded-lg text-sm text-gray-300 overflow-x-auto min-h-[150px]"></pre>
             </div>
         </div>
-
     </div>
 
     <script>
-        // --- DOM Elements ---
         const imageInput = document.getElementById('imageInput');
         const useCameraButton = document.getElementById('useCameraButton');
         const selectGalleryButton = document.getElementById('selectGalleryButton');
         const statusDiv = document.getElementById('status');
+        const cvStatusDiv = document.getElementById('cvStatus');
         const imagePreview = document.getElementById('imagePreview');
         const imagePreviewPlaceholder = document.getElementById('imagePreviewPlaceholder');
         const resultsImage = document.getElementById('resultsImage');
@@ -172,137 +150,193 @@
         const resultsLoader = document.getElementById('resultsLoader');
         const resultsJson = document.getElementById('resultsJson');
         const cameraModal = document.getElementById('cameraModal');
+        const cameraContainer = document.getElementById('cameraContainer');
         const cameraFeed = document.getElementById('cameraFeed');
         const captureButton = document.getElementById('captureButton');
         const closeCameraButton = document.getElementById('closeCameraButton');
+        const guideBoxes = { tl: document.getElementById('guide-box-tl'), tr: document.getElementById('guide-box-tr'), bl: document.getElementById('guide-box-bl'), br: document.getElementById('guide-box-br') };
+        const processingCanvas = document.getElementById('processingCanvas');
 
-        let fileAsBase64 = null;
-        let stream = null;
+        let fileAsBase64 = null, stream = null, isCvReady = false, isStreaming = false, animationFrameId = null;
 
-        // --- Event Listeners for Buttons ---
-        useCameraButton.addEventListener('click', async () => {
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                    cameraModal.style.display = 'flex';
-                    cameraFeed.srcObject = stream;
-                } catch (error) {
-                    console.error('Error accessing the camera.', error);
-                    statusDiv.textContent = 'Could not access the camera. Please check permissions.';
-                }
-            } else {
-                statusDiv.textContent = 'Your browser does not support camera access.';
-            }
-        });
+        function onCvReady() {
+            if (!cv) { cvStatusDiv.textContent = "Error: Could not load real-time analysis engine."; return; }
+            isCvReady = true;
+            cvStatusDiv.textContent = "Real-time analysis engine loaded.";
+            setTimeout(() => { cvStatusDiv.textContent = ""; }, 3000);
+        }
+        if (typeof cv === 'undefined') { cvStatusDiv.textContent = 'Loading real-time analysis engine...'; } else { onCvReady(); }
 
-        selectGalleryButton.addEventListener('click', () => {
-            imageInput.click();
-        });
-
-        closeCameraButton.addEventListener('click', () => {
-            stopCameraStream();
-            cameraModal.style.display = 'none';
-        });
+        useCameraButton.addEventListener('click', () => startCamera());
+        selectGalleryButton.addEventListener('click', () => imageInput.click());
+        closeCameraButton.addEventListener('click', () => stopCamera());
 
         captureButton.addEventListener('click', () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = cameraFeed.videoWidth;
-            canvas.height = cameraFeed.videoHeight;
-            const context = canvas.getContext('2d');
-            context.drawImage(cameraFeed, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL('image/jpeg');
-            stopCameraStream();
-            cameraModal.style.display = 'none';
-            handleImageData(dataUrl);
+            const dataUrl = captureVisibleFrame();
+            if (dataUrl) {
+                stopCamera();
+                handleImageData(dataUrl);
+            }
         });
 
-        // --- Event Listener for File Input ---
         imageInput.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
-
+            const file = event.target.files[0]; if (!file) return;
             const reader = new FileReader();
-            reader.onload = (e) => {
-                handleImageData(e.target.result);
-            };
+            reader.onload = (e) => handleImageData(e.target.result);
             reader.readAsDataURL(file);
         });
+        
+        async function startCamera() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { statusDiv.textContent = 'Your browser does not support camera access.'; return; }
+            if (!isCvReady) { statusDiv.textContent = 'Please wait, analysis engine is loading.'; return; }
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                cameraFeed.srcObject = stream;
+                cameraModal.style.display = 'flex';
+                cameraFeed.onloadedmetadata = () => {
+                    processingCanvas.width = cameraFeed.videoWidth;
+                    processingCanvas.height = cameraFeed.videoHeight;
+                    isStreaming = true;
+                    requestAnimationFrame(processVideo);
+                };
+            } catch (error) { console.error('Error accessing camera.', error); statusDiv.textContent = 'Could not access camera. Check permissions.'; }
+        }
 
-        // --- Core Logic Functions ---
-        const stopCameraStream = () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
+        function stopCamera() {
+            isStreaming = false;
+            if (stream) { stream.getTracks().forEach(track => track.stop()); }
+            if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+            Object.values(guideBoxes).forEach(box => box.classList.remove('is-aligned'));
+            cameraModal.style.display = 'none';
+        }
+        
+        function processVideo() {
+            if (!isStreaming || !isCvReady) return;
+
+            const videoWidth = processingCanvas.width;
+            const videoHeight = processingCanvas.height;
+            processingCanvas.getContext('2d').drawImage(cameraFeed, 0, 0, videoWidth, videoHeight);
+
+            let src = cv.imread(processingCanvas);
+            let gray = new cv.Mat(); let blurred = new cv.Mat(); let binary = new cv.Mat();
+            let contours = new cv.MatVector(); let hierarchy = new cv.Mat();
+            let alignmentStatus = { tl: false, tr: false, bl: false, br: false };
+
+            try {
+                // **IMPROVED DETECTION PIPELINE**
+                // 1. Convert to Grayscale
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                // 2. Blur to remove noise
+                cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+                // 3. Use Adaptive Thresholding - MUCH more robust than a fixed threshold
+                cv.adaptiveThreshold(blurred, binary, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 4);
+                
+                cv.findContours(binary, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                for (let i = 0; i < contours.size(); ++i) {
+                    const cnt = contours.get(i);
+                    const area = cv.contourArea(cnt);
+                    
+                    if (area > 500 && area < 50000) { 
+                        let peri = cv.arcLength(cnt, true);
+                        let approx = new cv.Mat();
+                        cv.approxPolyDP(cnt, approx, 0.04 * peri, true);
+
+                        if (approx.rows === 4) {
+                            const M = cv.moments(cnt, false);
+                            const cx = M.m10 / M.m00; const cy = M.m01 / M.m00;
+                            if (cx < videoWidth * 0.25 && cy < videoHeight * 0.25) alignmentStatus.tl = true;
+                            else if (cx > videoWidth * 0.75 && cy < videoHeight * 0.25) alignmentStatus.tr = true;
+                            else if (cx < videoWidth * 0.25 && cy > videoHeight * 0.75) alignmentStatus.bl = true;
+                            else if (cx > videoWidth * 0.75 && cy > videoHeight * 0.75) alignmentStatus.br = true;
+                        }
+                        approx.delete();
+                    }
+                }
+                updateGuideBoxUI(alignmentStatus);
+            } catch(e) { console.error("OpenCV processing error:", e); } 
+            finally {
+                src.delete(); gray.delete(); blurred.delete(); binary.delete(); contours.delete(); hierarchy.delete();
             }
-        };
+            animationFrameId = requestAnimationFrame(processVideo);
+        }
+
+        function updateGuideBoxUI(status) {
+            guideBoxes.tl.classList.toggle('is-aligned', status.tl);
+            guideBoxes.tr.classList.toggle('is-aligned', status.tr);
+            guideBoxes.bl.classList.toggle('is-aligned', status.bl);
+            guideBoxes.br.classList.toggle('is-aligned', status.br);
+        }
+
+        /**
+         * Captures only the visible portion of the video feed, accounting for 'object-fit: cover'.
+         * This ensures the captured image matches what the user sees.
+         */
+        function captureVisibleFrame() {
+            const video = cameraFeed;
+            const container = cameraContainer;
+            const videoWidth = video.videoWidth;
+            const videoHeight = video.videoHeight;
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+
+            const videoRatio = videoWidth / videoHeight;
+            const containerRatio = containerWidth / containerHeight;
+
+            let sx = 0, sy = 0, sWidth = videoWidth, sHeight = videoHeight;
+
+            // Figure out the cropping
+            if (videoRatio > containerRatio) { // Video is wider than container, so we crop the sides
+                sWidth = videoHeight * containerRatio;
+                sx = (videoWidth - sWidth) / 2;
+            } else { // Video is taller than container, so we crop top and bottom
+                sHeight = videoWidth / containerRatio;
+                sy = (videoHeight - sHeight) / 2;
+            }
+            
+            const captureCanvas = document.createElement('canvas');
+            captureCanvas.width = sWidth;
+            captureCanvas.height = sHeight;
+            const ctx = captureCanvas.getContext('2d');
+
+            ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, sWidth, sHeight);
+            return captureCanvas.toDataURL('image/jpeg');
+        }
 
         const handleImageData = (dataUrl) => {
-            // Show preview
             imagePreview.src = dataUrl;
             imagePreview.classList.remove('hidden');
             imagePreviewPlaceholder.classList.add('hidden');
-
-            // Extract raw base64 data for the API
             fileAsBase64 = dataUrl.split(',')[1];
-
-            // INSTANTLY START SCANNING
             scanImage();
         };
 
         const scanImage = async () => {
-            if (!fileAsBase64) {
-                statusDiv.textContent = "No file data is available.";
-                return;
-            }
-
-            // --- Update UI to show processing state ---
+            if (!fileAsBase64) { statusDiv.textContent = "No file data is available."; return; }
             statusDiv.textContent = "Processing... Please wait.";
             resultsImage.classList.add('hidden');
             resultsImagePlaceholder.classList.add('hidden');
-            resultsLoader.classList.remove('hidden'); // Show loader
+            resultsLoader.classList.remove('hidden');
             resultsJson.textContent = "";
-
-            // Disable buttons during processing
-            useCameraButton.disabled = true;
-            selectGalleryButton.disabled = true;
-
+            useCameraButton.disabled = true; selectGalleryButton.disabled = true;
             try {
-                // --- API Call using fetch ---
-                const response = await fetch('https://pyomr.onrender.com/scan', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ base64_data: fileAsBase64 })
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`API Error: ${response.status} - ${errorData.error || 'Unknown error'}`);
-                }
-
+                const response = await fetch('https://pyomr.onrender.com/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ base64_data: fileAsBase64 }) });
+                if (!response.ok) { const errorData = await response.json(); throw new Error(`API Error: ${response.status} - ${errorData.error || 'Unknown error'}`); }
                 const data = await response.json();
-
-                // --- Display the Results ---
-                // 1. Display the processed image
                 resultsImage.src = `data:image/jpeg;base64,${data['scanned_results.jpg']}`;
                 resultsImage.classList.remove('hidden');
-
-                // 2. Display the JSON data
                 resultsJson.textContent = JSON.stringify(data['omr_base_data.json'], null, 2);
-
                 statusDiv.textContent = "Scan complete!";
-
             } catch (error) {
                 console.error('Failed to scan:', error);
                 statusDiv.textContent = `Error: ${error.message}`;
-                resultsJson.textContent = `An error occurred. See the console for more details.`;
-                resultsImagePlaceholder.classList.remove('hidden'); // Show placeholder on error
+                resultsJson.textContent = `An error occurred. See console for details.`;
+                resultsImagePlaceholder.classList.remove('hidden');
             } finally {
-                // Hide loader and re-enable buttons after the process
                 resultsLoader.classList.add('hidden');
-                useCameraButton.disabled = false;
-                selectGalleryButton.disabled = false;
+                useCameraButton.disabled = false; selectGalleryButton.disabled = false;
             }
         };
     </script>
-
 </body>
 </html>
