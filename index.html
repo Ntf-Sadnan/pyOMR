@@ -6,95 +6,148 @@
     <title>PyOMR</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Custom styles can be added here if needed */
+        /* A simple pulse animation for the loading state */
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: .5;
+            }
+        }
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        /* Webkit scrollbar styling for a cleaner look in the JSON viewer */
+        pre::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        pre::-webkit-scrollbar-track {
+            background: #1a202c; /* bg-gray-800 */
+        }
+        pre::-webkit-scrollbar-thumb {
+            background-color: #4a5568; /* bg-gray-600 */
+            border-radius: 4px;
+            border: 2px solid #1a202c; /* bg-gray-800 */
+        }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-900 text-gray-200 font-sans">
 
-    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
-        <div class="bg-white rounded-lg shadow-lg p-6 sm:p-8">
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-5xl">
 
-            <div class="text-center mb-8">
-                <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">OMR Sheet Scanner</h1>
-                <p class="text-gray-600 mt-2">Select an image of your OMR sheet to scan.</p>
-            </div>
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 class="text-4xl sm:text-5xl font-bold text-white">PyOMR</h1>
+            <p class="text-gray-400 mt-3 text-lg">Instantly scan your OMR sheets from an image.</p>
+        </header>
 
-            <div class="mb-6">
-                <label for="imageInput" class="w-full text-center inline-block cursor-pointer bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300">
-                    Select Image or Use Camera
-                </label>
-                <input type="file" id="imageInput" accept="image/*" capture="environment" class="hidden">
-            </div>
-
-            <button id="scanButton" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition-colors duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
-                Scan OMR Sheet
-            </button>
-
-            <div id="status" class="text-center my-4 font-semibold text-gray-700"></div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Your Selected Image:</h2>
-                    <div class="bg-gray-200 rounded-lg p-4 min-h-[200px] flex items-center justify-center">
-                        <img id="imagePreview" src="" alt="Preview of the selected image" class="max-w-full h-auto rounded-lg hidden">
-                        <span id="imagePreviewPlaceholder" class="text-gray-500">Image preview will appear here</span>
-                    </div>
-                </div>
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Scanned Results Image:</h2>
-                    <div class="bg-gray-200 rounded-lg p-4 min-h-[200px] flex items-center justify-center">
-                        <img id="resultsImage" src="" alt="Processed image from the API" class="max-w-full h-auto rounded-lg hidden">
-                        <span id="resultsImagePlaceholder" class="text-gray-500">Processed image will appear here</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="mt-8">
-                <h2 class="text-2xl font-bold text-gray-800 mb-4">Detected Answers (JSON):</h2>
-                <pre id="resultsJson" class="bg-gray-900 text-white p-4 rounded-lg text-sm overflow-x-auto"></pre>
+        <!-- Action Buttons -->
+        <div class="max-w-xl mx-auto mb-10">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button id="useCameraButton" class="w-full bg-white text-gray-900 font-bold py-3 px-4 rounded-lg hover:bg-gray-200 transition-colors duration-300 flex items-center justify-center space-x-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <span>Use Camera</span>
+                </button>
+                <button id="selectGalleryButton" class="w-full bg-gray-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-600 border border-gray-600 transition-colors duration-300 flex items-center justify-center space-x-2">
+                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <span>Choose from Gallery</span>
+                </button>
             </div>
         </div>
+        <input type="file" id="imageInput" accept="image/*" class="hidden">
+
+        <!-- Status & Results Area -->
+        <div id="status" class="text-center my-5 font-semibold text-gray-400 min-h-[24px]"></div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Input Image Card -->
+            <div>
+                <h2 class="text-xl font-bold text-white mb-4">Input Image</h2>
+                <div class="bg-gray-800 rounded-lg p-4 min-h-[300px] flex items-center justify-center border border-gray-700">
+                    <img id="imagePreview" src="" alt="Preview of the selected image" class="max-w-full h-auto rounded-lg hidden">
+                    <span id="imagePreviewPlaceholder" class="text-gray-500">Select an image to begin</span>
+                </div>
+            </div>
+            <!-- Results Image Card -->
+            <div>
+                <h2 class="text-xl font-bold text-white mb-4">Processed Image</h2>
+                <div id="resultsContainer" class="bg-gray-800 rounded-lg p-4 min-h-[300px] flex items-center justify-center border border-gray-700">
+                    <img id="resultsImage" src="" alt="Processed image from the API" class="max-w-full h-auto rounded-lg hidden">
+                    <div id="resultsLoader" class="hidden text-center text-gray-500">
+                        <div class="w-8 h-8 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                        <p class="mt-3">Processing your image...</p>
+                    </div>
+                    <span id="resultsImagePlaceholder" class="text-gray-500">Results will appear here</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- JSON Output -->
+        <div class="mt-10">
+            <h2 class="text-xl font-bold text-white mb-4">Detected Answers (JSON)</h2>
+            <div class="bg-gray-800 rounded-lg border border-gray-700">
+                <pre id="resultsJson" class="p-4 rounded-lg text-sm text-gray-300 overflow-x-auto min-h-[150px]"></pre>
+            </div>
+        </div>
+
     </div>
 
     <script>
         // --- DOM Elements ---
         const imageInput = document.getElementById('imageInput');
-        const scanButton = document.getElementById('scanButton');
+        const useCameraButton = document.getElementById('useCameraButton');
+        const selectGalleryButton = document.getElementById('selectGalleryButton');
         const statusDiv = document.getElementById('status');
         const imagePreview = document.getElementById('imagePreview');
-        const resultsImage = document.getElementById('resultsImage');
-        const resultsJson = document.getElementById('resultsJson');
         const imagePreviewPlaceholder = document.getElementById('imagePreviewPlaceholder');
+        const resultsImage = document.getElementById('resultsImage');
         const resultsImagePlaceholder = document.getElementById('resultsImagePlaceholder');
+        const resultsLoader = document.getElementById('resultsLoader');
+        const resultsJson = document.getElementById('resultsJson');
 
         let fileAsBase64 = null;
 
+        // --- Event Listeners for Buttons ---
+        useCameraButton.addEventListener('click', () => {
+            imageInput.setAttribute('capture', 'environment'); // Prefers the rear camera
+            imageInput.click();
+        });
+
+        selectGalleryButton.addEventListener('click', () => {
+            imageInput.removeAttribute('capture');
+            imageInput.click();
+        });
+
         // --- Event Listener for File Input ---
+        // This now triggers the entire process
         imageInput.addEventListener('change', (event) => {
             const file = event.target.files[0];
-            if (!file) {
-                scanButton.disabled = true;
-                return;
-            }
+            if (!file) return;
 
-            // Use FileReader to convert image to Base64
+            // Immediately start the process
+            handleImageFile(file);
+        });
+
+        // --- Core Logic Functions ---
+        const handleImageFile = (file) => {
             const reader = new FileReader();
 
             reader.onload = (e) => {
-                // The result includes the data URL prefix (e.g., "data:image/jpeg;base64,")
                 const fullBase64String = e.target.result;
 
-                // Show the selected image in the preview
+                // Show preview
                 imagePreview.src = fullBase64String;
                 imagePreview.classList.remove('hidden');
                 imagePreviewPlaceholder.classList.add('hidden');
 
-                // Store the RAW base64 data for the API call. We MUST remove the prefix.
-                // The prefix ends at the first comma.
+                // Extract raw base64 data for the API
                 fileAsBase64 = fullBase64String.split(',')[1];
 
-                scanButton.disabled = false;
-                statusDiv.textContent = "Image is ready to be scanned.";
+                // INSTANTLY START SCANNING
+                scanImage();
             };
 
             reader.onerror = () => {
@@ -102,41 +155,35 @@
                 console.error("FileReader error.");
             };
 
-            // Read the file as a Data URL (which is a base64 string with a prefix)
             reader.readAsDataURL(file);
-        });
+        };
 
-
-        // --- Event Listener for the Scan Button ---
-        scanButton.addEventListener('click', async () => {
+        const scanImage = async () => {
             if (!fileAsBase64) {
-                statusDiv.textContent = "No file selected or file is not ready.";
+                statusDiv.textContent = "No file data is available.";
                 return;
             }
 
-            // Update UI to show processing state
-            statusDiv.textContent = "Scanning... Please wait.";
-            scanButton.disabled = true;
-            resultsImage.src = "";
+            // --- Update UI to show processing state ---
+            statusDiv.textContent = "Processing... Please wait.";
             resultsImage.classList.add('hidden');
-            resultsImagePlaceholder.classList.remove('hidden');
+            resultsImagePlaceholder.classList.add('hidden');
+            resultsLoader.classList.remove('hidden'); // Show loader
             resultsJson.textContent = "";
+
+            // Disable buttons during processing
+            useCameraButton.disabled = true;
+            selectGalleryButton.disabled = true;
 
             try {
                 // --- API Call using fetch ---
                 const response = await fetch('https://pyomr.onrender.com/scan', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    // Construct the JSON body as required by the API
-                    body: JSON.stringify({
-                        base64_data: fileAsBase64
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ base64_data: fileAsBase64 })
                 });
 
                 if (!response.ok) {
-                    // Handle HTTP errors (like 500, 400, etc.)
                     const errorData = await response.json();
                     throw new Error(`API Error: ${response.status} - ${errorData.error || 'Unknown error'}`);
                 }
@@ -144,15 +191,11 @@
                 const data = await response.json();
 
                 // --- Display the Results ---
-
                 // 1. Display the processed image
-                // We MUST add the data URL prefix back on to display the image in the browser.
                 resultsImage.src = `data:image/jpeg;base64,${data['scanned_results.jpg']}`;
                 resultsImage.classList.remove('hidden');
-                resultsImagePlaceholder.classList.add('hidden');
 
                 // 2. Display the JSON data
-                // JSON.stringify with indentation makes it readable.
                 resultsJson.textContent = JSON.stringify(data['omr_base_data.json'], null, 2);
 
                 statusDiv.textContent = "Scan complete!";
@@ -160,11 +203,15 @@
             } catch (error) {
                 console.error('Failed to scan:', error);
                 statusDiv.textContent = `Error: ${error.message}`;
+                resultsJson.textContent = `An error occurred. See the console for more details.`;
+                resultsImagePlaceholder.classList.remove('hidden'); // Show placeholder on error
             } finally {
-                // Re-enable the button after the process is finished (success or fail)
-                scanButton.disabled = false;
+                // Hide loader and re-enable buttons after the process
+                resultsLoader.classList.add('hidden');
+                useCameraButton.disabled = false;
+                selectGalleryButton.disabled = false;
             }
-        });
+        };
     </script>
 
 </body>
